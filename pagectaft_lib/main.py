@@ -6,6 +6,8 @@ from bs4 import BeautifulSoup
 company: list = []
 current_company_idx = None
 
+
+
 class Client:
     def __init__(self, imie: str, nazwisko: str):
         self.imie = imie
@@ -17,14 +19,32 @@ class Employee:
         self.imie = imie
         self.nazwisko = nazwisko
         self.lokalizacja = lokalizacja
+        self.coordinates = self.get_coordinates()
         self.marker = None
+
+    def get_coordinates(self) -> list:
+        url = f"https://pl.wikipedia.org/wiki/{self.lokalizacja}"
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response_html = BeautifulSoup(response.text, 'html.parser')
+        latitude = float(response_html.select(".latitude")[1].text.replace(",", "."))
+        longitude = float(response_html.select(".longitude")[1].text.replace(",", "."))
+        return [latitude, longitude]
 
 
 class Bookstore:
     def __init__(self, nazwa: str, lokalizacja: str):
         self.nazwa = nazwa
         self.lokalizacja = lokalizacja
+        self.coordinates = self.get_coordinates()
         self.marker = None
+
+    def get_coordinates(self) -> list:
+        url = f"https://pl.wikipedia.org/wiki/{self.lokalizacja}"
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response_html = BeautifulSoup(response.text, 'html.parser')
+        latitude = float(response_html.select(".latitude")[1].text.replace(",", "."))
+        longitude = float(response_html.select(".longitude")[1].text.replace(",", "."))
+        return [latitude, longitude]
 
 
 class Company:
@@ -32,11 +52,37 @@ class Company:
         self.nazwa = nazwa
         self.nip = nip
         self.lokalizacja = lokalizacja
+        self.coordinates = self.get_coordinates()
         self.marker = None
 
         self.bookstores: list = []
         self.employees: list = []
         self.clients: list = []
+
+    def get_coordinates(self) -> list:
+        url = f"https://pl.wikipedia.org/wiki/{self.lokalizacja}"
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response_html = BeautifulSoup(response.text, 'html.parser')
+        latitude = float(response_html.select(".latitude")[1].text.replace(",", "."))
+        longitude = float(response_html.select(".longitude")[1].text.replace(",", "."))
+        return [latitude, longitude]
+
+def update_map():
+    map_widget.delete_all_marker()
+
+    if current_company_idx is None:
+        for c in company:
+            c.marker = map_widget.set_marker(c.coordinates[0], c.coordinates[1], text=c.nazwa)
+
+    else:
+        c = company[current_company_idx]
+        c.marker = map_widget.set_marker(c.coordinates[0], c.coordinates[1], text=c.nazwa)
+        for b in c.bookstores:
+            b.marker = map_widget.set_marker(b.coordinates[0], b.coordinates[1], text=b.nazwa)
+        for e in c.employees:
+            e.marker = map_widget.set_marker(e.coordinates[0], e.coordinates[1], text=f"{e.imie} {e.nazwisko}")
+
+
 
 
 def refresh_all_lists():
@@ -63,13 +109,15 @@ def show_all_companies():
     listbox_pracownicy.delete(0, END)
     listbox_klienci.delete(0, END)
 
+    update_map()
+    map_widget.set_position(52.2, 21.0)
+    map_widget.set_zoom(6)
 
 
 def remove_company() -> None:
     global current_company_idx
     if not listbox_lista_obiektow.get(ACTIVE): return
     i = listbox_lista_obiektow.index(ACTIVE)
-
     company.pop(i)
 
     if current_company_idx == i:
@@ -78,6 +126,7 @@ def remove_company() -> None:
         if current_company_idx is not None and current_company_idx > i:
             current_company_idx -= 1
         show_company()
+        update_map()
 
 
 def show_company_details():
@@ -89,6 +138,11 @@ def show_company_details():
     label_firma_szczegoly_obiektu_wartosc.config(text=company[i].nazwa)
     label_nip_szczegoly_obiektu_wartosc.config(text=company[i].nip)
     label_lokalizacja_szczegoly_obiektu_wartosc.config(text=company[i].lokalizacja)
+
+    update_map()
+    map_widget.set_position(company[i].coordinates[0], company[i].coordinates[1])
+    map_widget.set_zoom(9)
+
     refresh_all_lists()
 
 
@@ -111,13 +165,15 @@ def update_company(i):
     company[i].nazwa = entry_nazwa.get()
     company[i].nip = entry_nip.get()
     company[i].lokalizacja = entry_lokalizacja.get()
+    company[i].coordinates = company[i].get_coordinates()
 
     button_dodaj_firme.config(text="Dodaj firmę", command=add_company)
     entry_nazwa.delete(0, END)
     entry_nip.delete(0, END)
     entry_lokalizacja.delete(0, END)
-
     show_company()
+    update_map()
+
 
 def add_company():
     nazwa = entry_nazwa.get()
@@ -131,11 +187,11 @@ def add_company():
     entry_lokalizacja.delete(0, END)
 
     show_company()
+    update_map()
 
 
-# ==========================================
 # FUNKCJE - KSIĘGARNIE
-# ==========================================
+
 def show_bookstore():
     listbox_ksiegarnie.delete(0, END)
     if listbox_lista_obiektow.get(ACTIVE):
@@ -151,7 +207,7 @@ def add_bookstore():
         entry_nazwa_k.delete(0, END)
         entry_lokalizacja_k.delete(0, END)
         show_bookstore()
-
+        update_map()
 
 
 def remove_bookstore():
@@ -160,7 +216,7 @@ def remove_bookstore():
         i_k = listbox_ksiegarnie.index(ACTIVE)
         company[i_f].bookstores.pop(i_k)
         show_bookstore()
-
+        update_map()
 
 
 def edit_bookstore():
@@ -180,11 +236,13 @@ def edit_bookstore():
 def update_bookstore(i_f, i_k):
     company[i_f].bookstores[i_k].nazwa = entry_nazwa_k.get()
     company[i_f].bookstores[i_k].lokalizacja = entry_lokalizacja_k.get()
+    company[i_f].bookstores[i_k].coordinates = company[i_f].bookstores[i_k].get_coordinates()
 
     button_dodaj_ksiegarnie.config(text="Dodaj", command=add_bookstore)
     entry_nazwa_k.delete(0, END)
     entry_lokalizacja_k.delete(0, END)
     show_bookstore()
+    update_map()
 
 
 def show_bookstore_location():
@@ -193,12 +251,13 @@ def show_bookstore_location():
         i_k = listbox_ksiegarnie.index(ACTIVE)
         ksiegarnia = company[i_f].bookstores[i_k]
 
+        map_widget.set_position(ksiegarnia.coordinates[0], ksiegarnia.coordinates[1])
+        map_widget.set_zoom(12)
 
 
 
-# ==========================================
 # FUNKCJE - PRACOWNICY
-# ==========================================
+
 def show_employee():
     listbox_pracownicy.delete(0, END)
     if listbox_lista_obiektow.get(ACTIVE):
@@ -216,6 +275,7 @@ def add_employee():
         entry_nazwisko_p.delete(0, END)
         entry_lokalizacja_p.delete(0, END)
         show_employee()
+        update_map()
 
 
 def remove_employee():
@@ -224,6 +284,7 @@ def remove_employee():
         i_p = listbox_pracownicy.index(ACTIVE)
         company[i_f].employees.pop(i_p)
         show_employee()
+        update_map()
 
 
 def edit_employee():
@@ -246,12 +307,14 @@ def update_employee(i_f, i_p):
     company[i_f].employees[i_p].imie = entry_imie_p.get()
     company[i_f].employees[i_p].nazwisko = entry_nazwisko_p.get()
     company[i_f].employees[i_p].lokalizacja = entry_lokalizacja_p.get()
+    company[i_f].employees[i_p].coordinates = company[i_f].employees[i_p].get_coordinates()
 
     button_dodaj_pracownika.config(text="Dodaj", command=add_employee)
     entry_imie_p.delete(0, END)
     entry_nazwisko_p.delete(0, END)
     entry_lokalizacja_p.delete(0, END)
     show_employee()
+    update_map()
 
 
 def show_employee_location():
@@ -260,11 +323,13 @@ def show_employee_location():
         i_p = listbox_pracownicy.index(ACTIVE)
         pracownik = company[i_f].employees[i_p]
 
+        map_widget.set_position(pracownik.coordinates[0], pracownik.coordinates[1])
+        map_widget.set_zoom(12)
 
 
-# ==========================================
+
 # FUNKCJE - KLIENCI
-# ==========================================
+
 def show_client():
     listbox_klienci.delete(0, END)
     if listbox_lista_obiektow.get(ACTIVE):
@@ -313,10 +378,22 @@ def update_client(i_f, i_c):
     entry_nazwisko_c.delete(0, END)
     show_client()
 
+
+
+# WIDOK (TKINTER)
+
+
 root = Tk()
-root.title("PageCraft - System Księgarniami")
+root.title("PageCraft - System Zarządzania Księgarniami")
 root.geometry("1200x900")
 
+ramka_mapa = Frame(root)
+map_widget = tkintermapview.TkinterMapView(ramka_mapa, width=1150, height=350, corner_radius=4)
+map_widget.set_zoom(6)
+map_widget.set_position(52.2, 21.0)
+
+
+print("Pobieram współrzędne z Wikipedii... Proszę czekać.")
 
 c1 = Company("Wydawnictwo Alfa", 1111111111, "Warszawa")
 c1.bookstores.append(Bookstore("Alfa Centrum", "Siedlce"))
@@ -337,10 +414,14 @@ c3.clients.append(Client("Katarzyna", "Lewandowska"))
 company.append(c3)
 
 c4 = Company("Delta Books", 4444444444, "Zabrze")
-c4.bookstores.append(Bookstore("Delta Morze", "Radom"))
+c4.bookstores.append(Bookstore("Delta Morze", "Kalisz"))
 c4.employees.append(Employee("Tomasz", "Wójcik", "Opole"))
 c4.clients.append(Client("Michał", "Kamiński"))
 company.append(c4)
+
+print("Gotowe! Otwieram aplikację.")
+
+# BUDOWA INTERFEJSU
 
 ramka_lista_obiektow = Frame(root)
 ramka_formularz = Frame(root)
@@ -358,6 +439,8 @@ ramka_ksiegarnie.grid(row=1, column=0, padx=20, pady=10, sticky=N)
 ramka_pracownicy.grid(row=1, column=1, padx=20, pady=10, sticky=N)
 ramka_klienci.grid(row=1, column=2, padx=20, pady=10, sticky=N)
 
+ramka_mapa.grid(row=2, column=0, columnspan=3, pady=20)
+map_widget.grid(row=0, column=0)
 
 # --- 1. GŁÓWNA LISTA FIRM ---
 Label(ramka_lista_obiektow, text="Lista firm:").grid(row=0, column=0, columnspan=3, sticky=W)
@@ -457,4 +540,6 @@ button_dodaj_klienta.grid(row=4, column=0, pady=5)
 Button(ramka_klienci, text="Edytuj", command=edit_client).grid(row=4, column=1, pady=5)
 Button(ramka_klienci, text="Usuń", command=remove_client).grid(row=4, column=2, pady=5)
 
+show_company()
+update_map()
 root.mainloop()
